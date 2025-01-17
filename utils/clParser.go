@@ -1,23 +1,28 @@
 package utils
 
-import (
-	"fmt"
-	"os"
-)
+import "os"
 
-func DoComand(call Call, commandContext string) {
-	switch call {
-	case Exit:
-		os.Exit(0)
-	case NewLine:
-		fmt.Println(commandContext)
-		PrintPrompt()
+// "fmt"
+// "os"
+
+func DoMetaCommand(commandContext string) MetaCommandResult {
+	// if we know such command then success
+	if commandContext == ".exit" {
+		os.Exit(int(MetaCommandSuccess))
 	}
+	return MetaCommandUnrecognized
 }
 
-func ParseCommand(line string) (Call, string) {
-	if line == ".exit" {
-		return Exit, line
+func PrepareSrarement(input string, statement *Statement) PrepareResult {
+	// if startswith insert
+	if input[:6] == "insert" {
+		statement.Type = StatementInsert
+		return PrepareSuccess
 	}
-	return NewLine, line
+	// if startswith select
+	if input[:6] == "select" {
+		statement.Type = StatementSelect
+		return PrepareSuccess
+	}
+	return PrepareUnrecognizedStatement
 }

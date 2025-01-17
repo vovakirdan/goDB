@@ -28,7 +28,22 @@ func createCharacterSet(phrase string) []string {
 	return set
 } 
 
-
 func PrintPrompt() {
-	fmt.Print(Prompt)
+	fmt.Print(DefaultPrompt)
+}
+
+func PrintUnrecognizedCommand(promt string) {
+	fmt.Printf("%s %s\n", UnrecognizedPromt, strings.Trim(promt, "."))
+}
+
+func PrintUnrecognizedKeyword(promt string) {
+	// do something like:
+	// selrct ...
+	// ^^^^^^ unrecognized keyword
+	fmt.Printf("%s ...\n", promt)
+	fmt.Printf("%s %s\n", strings.Repeat("^", len(promt)), UnrecognizedKeyword)
+}
+
+func PrintHelp() {
+	fmt.Println("Help:")
 }

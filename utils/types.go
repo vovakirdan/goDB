@@ -1,13 +1,32 @@
 package utils
 
 const (
-	Prompt = "goDB> "
+	DefaultPrompt = "goDB> "
+	UnrecognizedPromt = "Unrecognized command:"
+	UnrecognizedKeyword = "unrecognized keyword"
 )
 
-type Call int
+type MetaCommandResult int
 
 const (
-	NewLine Call = iota
-	Exit
-	NoSuchCommand = 99
+	MetaCommandSuccess MetaCommandResult = iota
+	MetaCommandUnrecognized
 )
+
+type PrepareResult int
+
+const (
+	PrepareSuccess PrepareResult = iota
+	PrepareUnrecognizedStatement
+)
+
+type StatementType int
+
+const (
+	StatementInsert StatementType = iota
+	StatementSelect
+)
+
+type Statement struct {
+	Type StatementType
+}

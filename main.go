@@ -9,14 +9,30 @@ import (
 )
 
 func main() {
-	utils.PrintPrompt()
 	scanner := bufio.NewScanner(os.Stdin)
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		utils.PrintPrompt()
+		scanner.Scan()
+		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, ".") {
-			call, context := utils.ParseCommand(line)
-			utils.DoComand(call, context)
+			switch (utils.DoMetaCommand(line)) {
+				case utils.MetaCommandSuccess:
+					continue
+				case utils.MetaCommandUnrecognized:
+					utils.PrintUnrecognizedCommand(line)
+					continue
+			}
 		}
+		var statement utils.Statement
+		switch (utils.PrepareSrarement(line, &statement)) {
+		case utils.PrepareSuccess:
+			// do nothing
+		case utils.PrepareUnrecognizedStatement:
+			utils.PrintUnrecognizedKeyword(line)
+			continue
+		}
+
+		// execute statement
 	}
 }
