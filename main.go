@@ -3,36 +3,37 @@ package main
 import (
 	"bufio"
 	"os"
-	"strings"
 
 	"goDB/utils"
 )
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	buffer := NewBuffer()
 
 	for {
 		utils.PrintPrompt()
 		scanner.Scan()
-		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, ".") {
-			switch (utils.DoMetaCommand(line)) {
+		buffer.read(scanner.Text())
+		if buffer.sysCommand {
+			switch (utils.DoMetaCommand(buffer.buffer)) {
 				case utils.MetaCommandSuccess:
 					continue
 				case utils.MetaCommandUnrecognized:
-					utils.PrintUnrecognizedCommand(line)
+					utils.PrintUnrecognizedCommand(buffer.keywords[0])
 					continue
 			}
 		}
 		var statement utils.Statement
-		switch (utils.PrepareSrarement(line, &statement)) {
+		switch (utils.PrepareSrarement(buffer.buffer, &statement)) {
 		case utils.PrepareSuccess:
 			// do nothing
 		case utils.PrepareUnrecognizedStatement:
-			utils.PrintUnrecognizedKeyword(line)
+			utils.PrintUnrecognizedKeyword(buffer.keywords[0])
 			continue
 		}
 
 		// execute statement
+		utils.ExecuteStatement(&statement)
 	}
 }

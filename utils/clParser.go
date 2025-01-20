@@ -1,9 +1,9 @@
 package utils
 
-import "os"
-
-// "fmt"
-// "os"
+import (
+	"fmt"
+	"os"
+)
 
 func DoMetaCommand(commandContext string) MetaCommandResult {
 	// if we know such command then success
@@ -14,6 +14,9 @@ func DoMetaCommand(commandContext string) MetaCommandResult {
 }
 
 func PrepareSrarement(input string, statement *Statement) PrepareResult {
+	if len(input) < 6 {
+		return PrepareUnrecognizedStatement
+	}
 	// if startswith insert
 	if input[:6] == "insert" {
 		statement.Type = StatementInsert
@@ -25,4 +28,13 @@ func PrepareSrarement(input string, statement *Statement) PrepareResult {
 		return PrepareSuccess
 	}
 	return PrepareUnrecognizedStatement
+}
+
+func ExecuteStatement(statement *Statement) {
+	switch statement.Type {
+	case StatementInsert:
+		fmt.Println("Executing insert statement")
+	case StatementSelect:
+		fmt.Println("Executing select statement")
+	}
 }
