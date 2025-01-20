@@ -3,11 +3,16 @@ package utils
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
-func DoMetaCommand(commandContext string) MetaCommandResult {
+func DoMetaCommand(commandContext string) MetaCommandResult {  // todo command predict
+	keywords := strings.Fields(strings.Trim(strings.TrimSpace(commandContext), "."))
+	if len(keywords) == 0 {
+		return MetaCommandEmpty
+	}
 	// if we know such command then success
-	if commandContext == ".exit" {
+	if keywords[0] == "exit" {
 		os.Exit(int(MetaCommandSuccess))
 	}
 	return MetaCommandUnrecognized

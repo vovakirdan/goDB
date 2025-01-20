@@ -10,6 +10,7 @@ type MetaCommandResult int
 
 const (
 	MetaCommandSuccess MetaCommandResult = iota
+	MetaCommandEmpty
 	MetaCommandUnrecognized
 )
 

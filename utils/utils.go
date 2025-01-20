@@ -36,6 +36,10 @@ func PrintUnrecognizedCommand(promt string) {
 	fmt.Printf("%s %s\n", UnrecognizedPromt, strings.Trim(promt, "."))
 }
 
+func PrintEmptyCommand() {
+	fmt.Println("Empty command passed")
+}
+
 func PrintUnrecognizedKeyword(promt string) {
 	// do something like:
 	// selrct ...

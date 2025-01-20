@@ -14,20 +14,26 @@ func main() {
 	for {
 		utils.PrintPrompt()
 		scanner.Scan()
+		if len(scanner.Text()) == 0 {
+			continue
+		}
 		buffer.read(scanner.Text())
 		if buffer.sysCommand {
 			switch (utils.DoMetaCommand(buffer.buffer)) {
 				case utils.MetaCommandSuccess:
 					continue
+				case utils.MetaCommandEmpty:
+					utils.PrintEmptyCommand()
+					continue
 				case utils.MetaCommandUnrecognized:
-					utils.PrintUnrecognizedCommand(buffer.keywords[0])
+					utils.PrintUnrecognizedCommand(buffer.buffer)
 					continue
 			}
 		}
 		var statement utils.Statement
 		switch (utils.PrepareSrarement(buffer.buffer, &statement)) {
 		case utils.PrepareSuccess:
-			// do nothing
+			continue
 		case utils.PrepareUnrecognizedStatement:
 			utils.PrintUnrecognizedKeyword(buffer.keywords[0])
 			continue

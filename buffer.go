@@ -4,28 +4,40 @@ import (
 	"strings"
 )
 
-// implement buffer that can:
-// count symbols, count words (keywords)
-
+// Buffer хранит введённую строку, список ключевых слов и некоторую статистику
 type Buffer struct {
-	buffer string
-	keywords []string
-	nWords int
-	nSymbols int
-	sysCommand bool
+	buffer     string   // исходная строка
+	keywords   []string // разбитые слова (токены)
+	nWords     int
+	nSymbols   int
+	sysCommand bool     // признак, что строка начинается с '.'
 }
 
+// NewBuffer создаёт новый буфер
 func NewBuffer() *Buffer {
 	return &Buffer{}
 }
 
+// read считывает ввод пользователя и заполняет структуру Buffer
 func (b *Buffer) read(input string) {
-	b.buffer = strings.TrimSpace(input)
+	input = strings.TrimSpace(input)
+
+	b.buffer = input
 	b.sysCommand = strings.HasPrefix(input, ".")
-	b.keywords = strings.Fields(input)
+
 	if b.sysCommand {
-		b.keywords = b.keywords[:0]
+		trimmed := strings.TrimLeft(input, ".")
+		trimmed = strings.TrimSpace(trimmed)
+
+		if len(trimmed) == 0 {
+			b.keywords = nil
+		} else {
+			b.keywords = strings.Fields(trimmed)
+		}
+	} else {
+		b.keywords = strings.Fields(input)
 	}
+
 	b.nSymbols = len(input)
 	b.nWords = len(b.keywords)
 }
