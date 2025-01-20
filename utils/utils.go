@@ -40,7 +40,7 @@ func PrintEmptyCommand() {
 	fmt.Println("Empty command passed")
 }
 
-func PrintUnrecognizedKeyword(promt string) {
+func PrintUnrecognizedKeyword(promt string) {  // todo find where the error is
 	// do something like:
 	// selrct ...
 	// ^^^^^^ unrecognized keyword

@@ -9,7 +9,7 @@ import (
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	buffer := NewBuffer()
+	buffer := utils.NewBuffer()
 
 	for {
 		utils.PrintPrompt()
@@ -17,25 +17,25 @@ func main() {
 		if len(scanner.Text()) == 0 {
 			continue
 		}
-		buffer.read(scanner.Text())
-		if buffer.sysCommand {
-			switch (utils.DoMetaCommand(buffer.buffer)) {
+		buffer.Read(scanner.Text())
+		if buffer.IsSysCommand() {
+			switch (utils.DoMetaCommand(buffer)) {
 				case utils.MetaCommandSuccess:
 					continue
 				case utils.MetaCommandEmpty:
 					utils.PrintEmptyCommand()
 					continue
 				case utils.MetaCommandUnrecognized:
-					utils.PrintUnrecognizedCommand(buffer.buffer)
+					utils.PrintUnrecognizedCommand(buffer.Buffer())
 					continue
 			}
 		}
 		var statement utils.Statement
-		switch (utils.PrepareSrarement(buffer.buffer, &statement)) {
+		switch (utils.PrepareSrarement(buffer, &statement)) {
 		case utils.PrepareSuccess:
 			continue
 		case utils.PrepareUnrecognizedStatement:
-			utils.PrintUnrecognizedKeyword(buffer.keywords[0])
+			utils.PrintUnrecognizedKeyword(buffer.Keywords()[0])
 			continue
 		}
 

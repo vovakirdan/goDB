@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"strings"
@@ -19,7 +19,7 @@ func NewBuffer() *Buffer {
 }
 
 // read считывает ввод пользователя и заполняет структуру Buffer
-func (b *Buffer) read(input string) {
+func (b *Buffer) Read(input string) {
 	input = strings.TrimSpace(input)
 
 	b.buffer = input
@@ -40,4 +40,24 @@ func (b *Buffer) read(input string) {
 
 	b.nSymbols = len(input)
 	b.nWords = len(b.keywords)
+}
+
+func (b *Buffer) IsSysCommand() bool {
+	return b.sysCommand
+}
+
+func (b *Buffer) Keywords() []string {
+	return b.keywords
+}
+
+func (b *Buffer) NWords() int {
+	return b.nWords
+}
+
+func (b *Buffer) NSymbols() int {
+	return b.nSymbols
+}
+
+func (b *Buffer) Buffer() string {
+	return b.buffer
 }
