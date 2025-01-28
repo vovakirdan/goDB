@@ -16,6 +16,7 @@ func DoMetaCommand(b *buffer.Buffer, t *table.Table) types.MetaCommandResult {
         return types.MetaCommandEmpty
     }
     if b.Keywords()[0] == "exit" {
+		t.Close()
         os.Exit(int(types.MetaCommandSuccess))
     }
     return types.MetaCommandUnrecognized
