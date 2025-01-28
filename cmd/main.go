@@ -29,6 +29,9 @@ func main() {
         
         // Fill the buffer
         b.Read(inputText)
+		if b.NWords() == 0 {
+			continue
+		}
 
         // Check if it’s a meta command:
         if b.IsSysCommand() {
