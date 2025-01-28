@@ -21,7 +21,7 @@ func main() {
     filename := os.Args[1]
 
     // Вместо NewTable — открываем (создаём) "persisted" таблицу
-    t, err := table.OpenTable(filename)
+    t, err := table.DbOpen(filename)
     if err != nil {
         fmt.Printf("Error opening table from file %s: %v\n", filename, err)
         os.Exit(1)
@@ -73,4 +73,5 @@ func main() {
         // Выполняем Statement
         parser.ExecuteStatement(&stmt, t)
     }
+	_ = table.DbClose(t)
 }

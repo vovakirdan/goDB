@@ -16,7 +16,7 @@ func DoMetaCommand(b *buffer.Buffer, t *table.Table) types.MetaCommandResult {
         return types.MetaCommandEmpty
     }
     if b.Keywords()[0] == "exit" {
-		t.Close()
+		_ = table.DbClose(t)
         os.Exit(int(types.MetaCommandSuccess))
     }
     return types.MetaCommandUnrecognized
@@ -64,7 +64,7 @@ func ExecuteStatement(stmt *types.Statement, t *table.Table) {
     switch stmt.Type {
     case types.StatementInsert:
         // Вставляем новую строку
-        err := t.Insert(stmt.ID, stmt.Username, stmt.Email)
+        err := t.InsertRow(stmt.ID, stmt.Username, stmt.Email)
         if err != nil {
             fmt.Println("Error: Table full.")
         } else {
