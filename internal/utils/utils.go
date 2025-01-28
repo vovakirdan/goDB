@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"goDB/internal/types"
+	"goDB/internal/buffer"
 )
 
 // createCharacterSet creates a character set from a phrase.
@@ -32,6 +33,23 @@ func PrintUnrecognizedCommand(prompt string) {
 
 func PrintEmptyCommand() {
 	fmt.Println("Empty command passed")
+}
+
+func PrintSyntaxError(b *buffer.Buffer) {
+    // Get the full command
+    cmd := b.Buffer()
+
+    errorPos := strings.Index(cmd, b.Keywords()[0])
+    
+    // Print the command
+    fmt.Println(cmd)
+    
+    // Print the error indicator
+    fmt.Printf("%s%s\n", 
+        strings.Repeat(" ", errorPos), 
+        strings.Repeat("^", len(b.Keywords()[0])))
+    
+    fmt.Println("Syntax error at this position")
 }
 
 func PrintUnrecognizedKeyword(prompt string) {

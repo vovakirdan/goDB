@@ -2,13 +2,13 @@ package main
 
 import (
     "bufio"
-    "fmt"
     "os"
 
     "goDB/internal/buffer"
     "goDB/internal/parser"
     "goDB/internal/table"
     "goDB/internal/types"
+	"goDB/internal/utils"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
     // Start reading lines
     scanner := bufio.NewScanner(os.Stdin)
     for {
-        fmt.Print("goDB> ")
+        utils.PrintPrompt()
         if !scanner.Scan() {
             break
         }
@@ -37,10 +37,10 @@ func main() {
         if b.IsSysCommand() {
             switch parser.DoMetaCommand(b, t) {
             case types.MetaCommandEmpty:
-                fmt.Println("Empty command.")
+                utils.PrintEmptyCommand()
                 continue
             case types.MetaCommandUnrecognized:
-                fmt.Println("Unrecognized command.")
+                utils.PrintUnrecognizedCommand(b.Keywords()[0])
                 continue
             case types.MetaCommandSuccess:
                 continue
@@ -53,10 +53,10 @@ func main() {
         case types.PrepareSuccess:
             // proceed
         case types.PrepareSyntaxError:
-            fmt.Println("Syntax error. Could not parse statement.")
+            utils.PrintSyntaxError(b)
             continue
         case types.PrepareUnrecognizedStatement:
-            fmt.Printf("Unrecognized keyword at start of '%s'\n", b.Keywords()[0])
+			utils.PrintUnrecognizedKeyword(b.Keywords()[0])
             continue
         }
 
