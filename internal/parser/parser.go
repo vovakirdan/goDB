@@ -1,78 +1,78 @@
 package parser
 
 import (
-	"fmt"
-	"os"
-	"strconv"
+    "fmt"
+    "os"
+    "strconv"
 
-	"goDB/internal/buffer"
-	"goDB/internal/table"
-	"goDB/internal/types"
+    "goDB/internal/buffer"
+    "goDB/internal/table"
+    "goDB/internal/types"
 )
 
-// DoMetaCommand checks meta-commands like "exit"
-func DoMetaCommand(b *buffer.Buffer, t *types.Table) types.MetaCommandResult {
-	if len(b.Keywords()) == 0 {
-		return types.MetaCommandEmpty
-	}
-	// If we know such command, then success
-	if b.Keywords()[0] == "exit" {
-		// In the C tutorial, we free the table. You can mimic that or just exit:
-		table.FreeTable(t)
-		os.Exit(int(types.MetaCommandSuccess))
-	}
-	return types.MetaCommandUnrecognized
+// DoMetaCommand проверяет мета-команды начинающиеся с '.'
+func DoMetaCommand(b *buffer.Buffer, t *table.Table) types.MetaCommandResult {
+    if len(b.Keywords()) == 0 {
+        return types.MetaCommandEmpty
+    }
+    if b.Keywords()[0] == "exit" {
+        os.Exit(int(types.MetaCommandSuccess))
+    }
+    return types.MetaCommandUnrecognized
 }
 
-// PrepareStatement parses the user input to fill Statement fields
+// PrepareStatement парсит ввод пользователя и инициализирует Statement
 func PrepareStatement(b *buffer.Buffer, statement *types.Statement) types.PrepareResult {
-	if len(b.Keywords()) == 0 {
-		return types.PrepareUnrecognizedStatement
-	}
+    words := b.Keywords()
+    if len(words) == 0 {
+        return types.PrepareUnrecognizedStatement
+    }
 
-	switch b.Keywords()[0] {
-	case "insert":
-		statement.Type = types.StatementInsert
-		// We expect: insert <id> <username> <email>
-		if b.NWords() < 4 {
-			return types.PrepareSyntaxError
-		}
+    switch words[0] {
+    case "insert":
+        statement.Type = types.StatementInsert
+        // Ожидаем: insert <id> <username> <email>
+        if len(words) < 4 {
+            return types.PrepareSyntaxError
+        }
 
-		// Parse ID
-		idVal, err := strconv.Atoi(b.Keywords()[1])
-		if err != nil {
-			return types.PrepareSyntaxError
-		}
-		statement.RowToInsert.ID = uint32(idVal)
+        // Парсим id
+        idVal, err := strconv.Atoi(words[1])
+        if err != nil {
+            return types.PrepareSyntaxError
+        }
+        statement.ID = uint32(idVal)
 
-		// Copy username, email into fixed-size arrays
-		copy(statement.RowToInsert.Username[:], b.Keywords()[2])
-		copy(statement.RowToInsert.Email[:], b.Keywords()[3])
+        // Копируем username и email
+        statement.Username = words[2]
+        statement.Email = words[3]
 
-		return types.PrepareSuccess
+        return types.PrepareSuccess
 
-	case "select":
-		statement.Type = types.StatementSelect
-		return types.PrepareSuccess
+    case "select":
+        statement.Type = types.StatementSelect
+        return types.PrepareSuccess
 
-	default:
-		return types.PrepareUnrecognizedStatement
-	}
+    default:
+        return types.PrepareUnrecognizedStatement
+    }
 }
 
-// ExecuteStatement runs INSERT/SELECT logic against our table
-func ExecuteStatement(statement *types.Statement, t *types.Table) {
-	switch statement.Type {
-	case types.StatementInsert:
-		res := table.ExecuteInsert(statement, t)
-		if res == types.ExecuteTableFull {
-			fmt.Println("Error: Table full.")
-		} else {
-			fmt.Println("Executed.")
-		}
+// ExecuteStatement обрабатывает INSERT и SELECT
+func ExecuteStatement(stmt *types.Statement, t *table.Table) {
+    switch stmt.Type {
+    case types.StatementInsert:
+        // Вставляем новую строку
+        err := t.Insert(stmt.ID, stmt.Username, stmt.Email)
+        if err != nil {
+            fmt.Println("Error: Table full.")
+        } else {
+            fmt.Println("Executed.")
+        }
 
-	case types.StatementSelect:
-		table.ExecuteSelect(t)
-		fmt.Println("Executed.")
-	}
+    case types.StatementSelect:
+        // Выводим все строки
+        t.SelectAll()
+        fmt.Println("Executed.")
+    }
 }

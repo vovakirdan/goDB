@@ -1,37 +1,6 @@
 package types
 
-import (
-	"unsafe"
-)
-
-const (
-	COLUMN_USERNAME_SIZE uint32 = 32
-	COLUMN_EMAIL_SIZE    uint32 = 255
-
-	PAGE_SIZE          uint32 = 4096
-	TABLE_MAX_PAGES    int    = 100
-)
-
-type Row struct {
-	ID       uint32
-	Username [COLUMN_USERNAME_SIZE]byte
-	Email    [COLUMN_EMAIL_SIZE]byte
-}
-
-var (
-	ID_SIZE        = uint32(unsafe.Sizeof(((Row{}).ID)))
-	USERNAME_SIZE  = COLUMN_USERNAME_SIZE
-	EMAIL_SIZE     = COLUMN_EMAIL_SIZE
-	ID_OFFSET      = uint32(0)
-	USERNAME_OFFSET = ID_OFFSET + ID_SIZE
-	EMAIL_OFFSET    = USERNAME_OFFSET + USERNAME_SIZE
-	ROW_SIZE        = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE
-)
-
-type Table struct {
-	NumRows uint32
-	Pages   [TABLE_MAX_PAGES][]byte
-}
+// Различные константы и типы для парсинга и исполнения
 
 const (
 	DefaultPrompt       = "goDB> "
@@ -39,6 +8,7 @@ const (
 	UnrecognizedKeyword = "unrecognized keyword"
 )
 
+// MetaCommandResult для .команд
 type MetaCommandResult int
 
 const (
@@ -47,6 +17,7 @@ const (
 	MetaCommandUnrecognized
 )
 
+// ExecuteResult для результатов выполнения (полная таблица, успех и т.п.)
 type ExecuteResult int
 
 const (
@@ -54,6 +25,7 @@ const (
 	ExecuteTableFull
 )
 
+// PrepareResult для стадий парсинга
 type PrepareResult int
 
 const (
@@ -62,6 +34,7 @@ const (
 	PrepareSyntaxError
 )
 
+// Типы команд
 type StatementType int
 
 const (
@@ -69,7 +42,10 @@ const (
 	StatementSelect
 )
 
+// Statement хранит данные, необходимые для INSERT / SELECT
 type Statement struct {
-	Type        StatementType
-	RowToInsert Row
+	Type     StatementType
+	ID       uint32
+	Username string
+	Email    string
 }
