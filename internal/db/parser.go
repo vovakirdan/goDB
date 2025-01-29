@@ -16,16 +16,16 @@ func DoMetaCommand(b *buffer.Buffer, t *Table) types.MetaCommandResult {
 	}
 	cmd := b.Keywords()[0]
 
-	if cmd == "exit" || cmd == ".exit" {
+	if cmd == "exit" {
 		// Закрываем и выходим
 		_ = DbClose(t)
 		os.Exit(int(types.MetaCommandSuccess))
-	} else if cmd == ".btree" {
+	} else if cmd == "btree" {
 		// Вывести структуру единственного листа (page=0)
 		fmt.Println("Tree:")
 		printLeafNode(t)
 		return types.MetaCommandSuccess
-	} else if cmd == ".constants" {
+	} else if cmd == "constants" {
 		printConstants()
 		return types.MetaCommandSuccess
 	}
