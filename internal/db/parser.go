@@ -21,7 +21,6 @@ func DoMetaCommand(b *buffer.Buffer, t *Table) types.MetaCommandResult {
 		_ = DbClose(t)
 		os.Exit(int(types.MetaCommandSuccess))
 	} else if cmd == "btree" {
-		// Вывести структуру единственного листа (page=0)
 		fmt.Println("Tree:")
 		printLeafNode(t)
 		return types.MetaCommandSuccess
@@ -29,11 +28,10 @@ func DoMetaCommand(b *buffer.Buffer, t *Table) types.MetaCommandResult {
 		printConstants()
 		return types.MetaCommandSuccess
 	}
-
 	return types.MetaCommandUnrecognized
 }
 
-// PrepareStatement разбирает INSERT, SELECT
+// PrepareStatement разбирает INSERT/SELECT
 func PrepareStatement(b *buffer.Buffer, statement *types.Statement) types.PrepareResult {
 	words := b.Keywords()
 	if len(words) == 0 {
@@ -64,7 +62,7 @@ func PrepareStatement(b *buffer.Buffer, statement *types.Statement) types.Prepar
 	}
 }
 
-// ExecuteStatement использует Cursor
+// ExecuteStatement
 func ExecuteStatement(stmt *types.Statement, t *Table) {
 	switch stmt.Type {
 	case types.StatementInsert:
@@ -74,7 +72,7 @@ func ExecuteStatement(stmt *types.Statement, t *Table) {
 	}
 }
 
-// executeInsert: вставляем в leaf node
+// INSERT с учётом поиска позиции и проверки дубликатов
 func executeInsert(stmt *types.Statement, t *Table) {
 	// Проверим, не заполнен ли лист
 	page0, err := getPage(t.pager, t.rootPageNum)
@@ -89,26 +87,35 @@ func executeInsert(stmt *types.Statement, t *Table) {
 		return
 	}
 
-	// Создаем курсор на "конец"
-	c := TableEnd(t)
+	key := stmt.ID
+	cursor := TableFind(t, key)
 
-	// Формируем Row
+	// Check duplicates
+	if cursor.CellNum < numCells {
+		existingKey := *leafNodeKey(page0, cursor.CellNum)
+		if existingKey == key {
+			fmt.Println("Error: Duplicate key.")
+			return
+		}
+	}
+
+	// form row
 	var r Row
 	r.ID = stmt.ID
 	copy(r.Username[:], stmt.Username)
 	copy(r.Email[:], stmt.Email)
 
 	// Вставляем
-	err = leafNodeInsert(c, r.ID, &r)
+	err = leafNodeInsert(cursor, r.ID, &r)
 	if err != nil {
 		fmt.Println("Error during insert:", err)
 		return
 	}
-	// Увеличилось число ячеек leaf
+
 	fmt.Println("Executed.")
 }
 
-// executeSelect: печатаем все строки leaf
+// SELECT (просто обходим все ячейки)
 func executeSelect(t *Table) {
 	c := TableStart(t)
 	var r Row
@@ -121,23 +128,18 @@ func executeSelect(t *Table) {
 		}
 		deserializeRow(slot, &r)
 		PrintRow(&r)
-
 		CursorAdvance(c)
 	}
 	fmt.Println("Executed.")
 }
 
-// --------------------------------
-// Мелкие вспомогательные обёртки
-// --------------------------------
-
+// Debug Print
 func printConstants() {
 	fmt.Println("Constants:")
 	fmt.Printf("ROW_SIZE: %d\n", rowSize)
 	fmt.Printf("LEAF_NODE_MAX_CELLS: %d\n", LeafNodeMaxCells)
 }
 
-// printLeafNode выводит ключи, хранящиеся в page=0 (единственный лист)
 func printLeafNode(t *Table) {
 	page0, err := getPage(t.pager, t.rootPageNum)
 	if err != nil {

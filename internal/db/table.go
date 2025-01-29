@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,35 +9,27 @@ import (
 )
 
 // ---------------------------
-// ROW и предыдущие вещи
+// ROW
 // ---------------------------
 
-// Параметры "страниц" и лимит страниц
 const (
 	PageSize      = 4096
 	TableMaxPages = 100
 )
 
-// Структура Row в стиле "C": ID=4 байта, Username=32, Email=255 (итого 291)
 type Row struct {
 	ID       uint32
 	Username [32]byte
 	Email    [255]byte
 }
 
-// Для вычисления размера Row используем unsafe
-const (
-	idSize       = 4                                 // uint32
-	usernameSize = 32                                // [32]byte
-	emailSize    = 255                               // [255]byte
-	rowSize      = idSize + usernameSize + emailSize // = 291
-)
+// rowSize = 4 + 32 + 255 = 291
+const rowSize = 4 + 32 + 255
 
 // ---------------------------
-// B-Tree Node Layout constants
+// B-Tree Layout
 // ---------------------------
 
-// NodeType (NODE_INTERNAL=1 / NODE_LEAF=2) — или iota
 type NodeType int
 
 const (
@@ -44,25 +37,25 @@ const (
 	NodeLeaf
 )
 
-// Common Node Header Layout
+// Common Node Header
 const (
-	NodeTypeSize         = 1 // byte
+	NodeTypeSize         = 1
 	NodeTypeOffset       = 0
-	IsRootSize           = 1 // byte
+	IsRootSize           = 1
 	IsRootOffset         = NodeTypeOffset + NodeTypeSize
-	ParentPointerSize    = 4 // uint32
+	ParentPointerSize    = 4
 	ParentPointerOffset  = IsRootOffset + IsRootSize
 	CommonNodeHeaderSize = NodeTypeSize + IsRootSize + ParentPointerSize
 )
 
-// Leaf Node Header Layout
+// Leaf Node Header
 const (
-	LeafNodeNumCellsSize   = 4 // uint32
+	LeafNodeNumCellsSize   = 4
 	LeafNodeNumCellsOffset = CommonNodeHeaderSize
 	LeafNodeHeaderSize     = CommonNodeHeaderSize + LeafNodeNumCellsSize
 )
 
-// Leaf Node Body Layout
+// Leaf Node Body
 const (
 	LeafNodeKeySize     = 4 // uint32
 	LeafNodeKeyOffset   = 0
@@ -75,7 +68,7 @@ const (
 )
 
 // ---------------------------
-// Pager & Table
+// Pager / Table
 // ---------------------------
 
 type Pager struct {
@@ -90,7 +83,6 @@ type Table struct {
 	rootPageNum uint32
 }
 
-// Cursor указывает на (page_num, cell_num) внутри B-Tree
 type Cursor struct {
 	Table      *Table
 	PageNum    uint32
@@ -99,69 +91,67 @@ type Cursor struct {
 }
 
 // ---------------------------
-// Функции для работы с узлами
+// Node "header" and "body" helpers
 // ---------------------------
 
-// leafNodeNumCells возвращает указатель на поле "количество ячеек" в leaf
+// Return the node's type from the first byte
+func getNodeType(node []byte) NodeType {
+	return NodeType(node[NodeTypeOffset])
+}
+
+func setNodeType(node []byte, t NodeType) {
+	node[NodeTypeOffset] = byte(t)
+}
+
+// Leaf
 func leafNodeNumCells(node []byte) *uint32 {
 	return (*uint32)(unsafe.Pointer(&node[LeafNodeNumCellsOffset]))
 }
 
-// leafNodeCell возвращает указатель на начало cell
 func leafNodeCell(node []byte, cellNum uint32) []byte {
 	start := LeafNodeHeaderSize + cellNum*LeafNodeCellSize
 	return node[start : start+LeafNodeCellSize]
 }
 
-// leafNodeKey возвращает указатель на key внутри cell
 func leafNodeKey(node []byte, cellNum uint32) *uint32 {
 	cell := leafNodeCell(node, cellNum)
 	return (*uint32)(unsafe.Pointer(&cell[LeafNodeKeyOffset]))
 }
 
-// leafNodeValue возвращает срез, где лежит сериализованный Row
 func leafNodeValue(node []byte, cellNum uint32) []byte {
 	cell := leafNodeCell(node, cellNum)
 	return cell[LeafNodeValueOffset : LeafNodeValueOffset+LeafNodeValueSize]
 }
 
-// initializeLeafNode инициализирует пустой лист
+// Init leaf
 func initializeLeafNode(node []byte) {
+	setNodeType(node, NodeLeaf)
 	*leafNodeNumCells(node) = 0
 }
 
-// leafNodeInsert вставляет (key, row) в позицию cursor.CellNum
-// пока не умеем split (если full — ошибка)
+// Insert key/value into leaf
 func leafNodeInsert(c *Cursor, key uint32, row *Row) error {
 	page, err := getPage(c.Table.pager, c.PageNum)
 	if err != nil {
 		return err
 	}
-	node := page
-
-	numCells := *leafNodeNumCells(node)
+	numCells := *leafNodeNumCells(page)
 	if numCells >= LeafNodeMaxCells {
-		// Узел заполнен, сплит не реализован
-		return fmt.Errorf("need to implement splitting a leaf node")
+		return errors.New("Need to implement splitting a leaf node.")
 	}
 
-	// Сдвигаем ячейки вправо, если вставка не в конец
+	// If not at end, shift cells to the right
 	if c.CellNum < numCells {
 		for i := numCells; i > c.CellNum; i-- {
-			src := leafNodeCell(node, i-1)
-			dst := leafNodeCell(node, i)
+			dst := leafNodeCell(page, i)
+			src := leafNodeCell(page, i-1)
 			copy(dst, src)
 		}
 	}
-
-	// Увеличиваем счётчик ячеек
-	*leafNodeNumCells(node) += 1
-
-	// Заполняем новую ячейку: key + сериализованный Row
-	*leafNodeKey(node, c.CellNum) = key
-	destValue := leafNodeValue(node, c.CellNum)
-	serializeRow(row, destValue)
-
+	*leafNodeNumCells(page) += 1
+	*leafNodeKey(page, c.CellNum) = key
+	dest := leafNodeValue(page, c.CellNum)
+	serializeRow(row, dest)
 	return nil
 }
 
@@ -172,48 +162,44 @@ func leafNodeInsert(c *Cursor, key uint32, row *Row) error {
 func DbOpen(filename string) (*Table, error) {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
-		return nil, fmt.Errorf("unable to open file: %v", err)
+		return nil, err
 	}
 	st, err := f.Stat()
 	if err != nil {
-		return nil, fmt.Errorf("stat error: %v", err)
+		return nil, err
 	}
+	fileLen := st.Size()
 
-	fileLength := st.Size()
-	pager := &Pager{
+	p := &Pager{
 		file:       f,
-		fileLength: fileLength,
+		fileLength: fileLen,
 	}
-
-	// Определяем, сколько полных страниц в файле
-	pager.numPages = uint32(fileLength / PageSize)
-	if fileLength%PageSize != 0 {
-		return nil, fmt.Errorf("db file is not a whole number of pages. Corrupt file")
-	}
-
-	// Заполняем pages[i] = nil
-	for i := 0; i < TableMaxPages; i++ {
-		pager.pages[i] = nil
+	p.numPages = uint32(fileLen / PageSize)
+	if fileLen%PageSize != 0 {
+		return nil, fmt.Errorf("db file not multiple of page size")
 	}
 
 	t := &Table{
-		pager:       pager,
-		rootPageNum: 0, // для упрощения
+		pager:       p,
+		rootPageNum: 0,
 	}
 
-	// Если файл пуст, инициализируем страницу 0 как пустой лист
-	if pager.numPages == 0 {
-		page0, _ := getPage(pager, 0)
+	// init pages
+	for i := 0; i < TableMaxPages; i++ {
+		p.pages[i] = nil
+	}
+
+	// If no pages, create page0 as leaf
+	if p.numPages == 0 {
+		page0, _ := getPage(p, 0)
 		initializeLeafNode(page0)
-		pager.numPages = 1
+		p.numPages = 1
 	}
-
 	return t, nil
 }
 
 func DbClose(t *Table) error {
 	p := t.pager
-	// Запишем все страницы
 	for i := uint32(0); i < p.numPages; i++ {
 		if p.pages[i] == nil {
 			continue
@@ -224,26 +210,19 @@ func DbClose(t *Table) error {
 		}
 		p.pages[i] = nil
 	}
-	err := p.file.Close()
-	if err != nil {
-		return fmt.Errorf("error closing file: %v", err)
-	}
-	return nil
+	return p.file.Close()
 }
 
 // ---------------------------
-// Pager Helpers
+// Pager logic
 // ---------------------------
 
 func getPage(p *Pager, pageNum uint32) ([]byte, error) {
 	if pageNum >= TableMaxPages {
 		return nil, fmt.Errorf("page %d out of bounds (max %d)", pageNum, TableMaxPages)
 	}
-	// Если страница не в кэше, загружаем
 	if p.pages[pageNum] == nil {
 		p.pages[pageNum] = make([]byte, PageSize)
-
-		// Если страница внутри файла, читаем
 		if pageNum < p.numPages {
 			offset := int64(pageNum) * PageSize
 			n, err := p.file.ReadAt(p.pages[pageNum], offset)
@@ -265,7 +244,7 @@ func pagerFlush(p *Pager, pageNum uint32) error {
 		return fmt.Errorf("write error page %d: %v", pageNum, err)
 	}
 	if n < PageSize {
-		return fmt.Errorf("did not write full page: %d/%d", n, PageSize)
+		return fmt.Errorf("not fully written page %d: wrote %d/%d", pageNum, n, PageSize)
 	}
 	return nil
 }
@@ -274,46 +253,29 @@ func pagerFlush(p *Pager, pageNum uint32) error {
 // Cursor logic
 // ---------------------------
 
-// TableStart: курсор на начало (page=rootPageNum, cell=0)
-func TableStart(tbl *Table) *Cursor {
-	c := &Cursor{
-		Table:      tbl,
-		PageNum:    tbl.rootPageNum,
+func TableStart(t *Table) *Cursor {
+	// find position for smallest key => cell=0
+	cursor := &Cursor{
+		Table:      t,
+		PageNum:    t.rootPageNum,
 		CellNum:    0,
 		EndOfTable: false,
 	}
-	page, _ := getPage(tbl.pager, c.PageNum)
-	numCells := *leafNodeNumCells(page)
-	if numCells == 0 {
-		c.EndOfTable = true
+	page, _ := getPage(t.pager, t.rootPageNum)
+	if *leafNodeNumCells(page) == 0 {
+		cursor.EndOfTable = true
 	}
-	return c
+	return cursor
 }
 
-// TableEnd: курсор на "конец" (после последнего cell)
-func TableEnd(tbl *Table) *Cursor {
-	c := &Cursor{
-		Table:      tbl,
-		PageNum:    tbl.rootPageNum,
-		EndOfTable: true,
-	}
-	page, _ := getPage(tbl.pager, c.PageNum)
-	numCells := *leafNodeNumCells(page)
-	c.CellNum = numCells
-	return c
-}
-
-// CursorValue: возвращает указатель (slice) на текущую строку
 func CursorValue(c *Cursor) ([]byte, error) {
 	page, err := getPage(c.Table.pager, c.PageNum)
 	if err != nil {
 		return nil, err
 	}
-	// leafNodeValue
 	return leafNodeValue(page, c.CellNum), nil
 }
 
-// CursorAdvance: двигаем курсор вперёд на 1
 func CursorAdvance(c *Cursor) {
 	page, _ := getPage(c.Table.pager, c.PageNum)
 	numCells := *leafNodeNumCells(page)
@@ -324,7 +286,54 @@ func CursorAdvance(c *Cursor) {
 }
 
 // ---------------------------
-// Serialization of Row
+// Searching for Key
+// ---------------------------
+
+// tableFind — ищет нужный ключ в tree
+func TableFind(t *Table, key uint32) *Cursor {
+	rootPage, _ := getPage(t.pager, t.rootPageNum)
+	typ := getNodeType(rootPage)
+	if typ == NodeLeaf {
+		return leafNodeFind(t, t.rootPageNum, key)
+	} else {
+		// internal not implemented
+		panic("searching internal node not implemented")
+	}
+}
+
+// leafNodeFind — бинарный поиск среди ячеек
+func leafNodeFind(t *Table, pageNum, key uint32) *Cursor {
+	c := &Cursor{
+		Table:   t,
+		PageNum: pageNum,
+	}
+
+	pg, _ := getPage(t.pager, pageNum)
+	numCells := *leafNodeNumCells(pg)
+
+	// binary search
+	minIndex := uint32(0)
+	onePastMaxIndex := numCells
+
+	for onePastMaxIndex != minIndex {
+		index := (minIndex + onePastMaxIndex) / 2
+		keyAtIndex := *leafNodeKey(pg, index)
+		if key == keyAtIndex {
+			// нашли
+			c.CellNum = index
+			return c
+		} else if key < keyAtIndex {
+			onePastMaxIndex = index
+		} else {
+			minIndex = index + 1
+		}
+	}
+	c.CellNum = minIndex
+	return c
+}
+
+// ---------------------------
+// Row serialization
 // ---------------------------
 
 // SerializeRow копирует поля Row в dest
@@ -341,7 +350,6 @@ func deserializeRow(src []byte, dest *Row) {
 	copy(dest.Email[:], src[4+32:4+32+255])
 }
 
-// putUint32 / getUint32 — для ID
 func putUint32(buf []byte, x uint32) {
 	buf[0] = byte(x)
 	buf[1] = byte(x >> 8)
@@ -355,7 +363,6 @@ func getUint32(buf []byte) uint32 {
 		(uint32(buf[3]) << 24)
 }
 
-// PrintRow для отладки
 func PrintRow(r *Row) {
 	uname := trimNull(r.Username[:])
 	email := trimNull(r.Email[:])
