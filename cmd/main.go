@@ -6,8 +6,7 @@ import (
     "os"
 
     "goDB/internal/buffer"
-    "goDB/internal/parser"
-    "goDB/internal/table"
+    "goDB/internal/db"
     "goDB/internal/types"
     "goDB/internal/utils"
 )
@@ -21,7 +20,7 @@ func main() {
     filename := os.Args[1]
 
     // Вместо NewTable — открываем (создаём) "persisted" таблицу
-    t, err := table.DbOpen(filename)
+    t, err := db.DbOpen(filename)
     if err != nil {
         fmt.Printf("Error opening table from file %s: %v\n", filename, err)
         os.Exit(1)
@@ -45,7 +44,7 @@ func main() {
 
         // Мета-команды (нач. с '.')
         if b.IsSysCommand() {
-            switch parser.DoMetaCommand(b, t) {
+            switch db.DoMetaCommand(b, t) {
             case types.MetaCommandEmpty:
                 utils.PrintEmptyCommand()
                 continue
@@ -59,7 +58,7 @@ func main() {
 
         // Подготавливаем Statement
         var stmt types.Statement
-        switch parser.PrepareStatement(b, &stmt) {
+        switch db.PrepareStatement(b, &stmt) {
         case types.PrepareSuccess:
             // proceed
         case types.PrepareSyntaxError:
@@ -71,7 +70,7 @@ func main() {
         }
 
         // Выполняем Statement
-        parser.ExecuteStatement(&stmt, t)
+        db.ExecuteStatement(&stmt, t)
     }
-	_ = table.DbClose(t)
+	_ = db.DbClose(t)
 }
