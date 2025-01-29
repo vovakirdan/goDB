@@ -45,7 +45,17 @@ type Pager struct {
 // Table ссылается на Pager и хранит количество строк (numRows)
 type Table struct {
 	pager   *Pager
-	numRows uint32
+	NumRows uint32
+}
+
+type Cursor struct {
+    Table       *Table
+    RowNum      uint32
+    EndOfTable  bool
+}
+
+func (t *Table) MaxRows() uint32 {
+	return tableMaxRows
 }
 
 // DbOpen открывает (или создаёт) файл БД и возвращает Table (аналог db_open)
@@ -73,7 +83,7 @@ func DbOpen(filename string) (*Table, error) {
 
 	t := &Table{
 		pager:   pager,
-		numRows: numRows,
+		NumRows: numRows,
 	}
 	return t, nil
 }
@@ -83,7 +93,7 @@ func DbClose(t *Table) error {
 	pager := t.pager
 
 	// Полных страниц:
-	numFullPages := t.numRows / rowsPerPage
+	numFullPages := t.NumRows / rowsPerPage
 
 	// Сбрасываем все полные страницы
 	for i := uint32(0); i < numFullPages; i++ {
@@ -98,7 +108,7 @@ func DbClose(t *Table) error {
 	}
 
 	// Возможно, есть неполная страница
-	additionalRows := t.numRows % rowsPerPage
+	additionalRows := t.NumRows % rowsPerPage
 	if additionalRows > 0 {
 		pageNum := numFullPages
 		if pager.pages[pageNum] != nil {
@@ -160,20 +170,18 @@ func getPage(p *Pager, pageNum uint32) ([]byte, error) {
 		// Если наша страница попадает в файл — читаем
 		if pageNum < fullPages {
 			offset := int64(pageNum) * PageSize
-			n, err := p.file.ReadAt(p.pages[pageNum], offset)
+			_, err := p.file.ReadAt(p.pages[pageNum], offset)
 			if err != nil && err != io.EOF {
 				return nil, fmt.Errorf("read error at page %d: %v", pageNum, err)
 			}
-			// n прочитанных байт, если меньше PageSize — значит страница частично заполнена
-			_ = n
 		}
 	}
 
 	return p.pages[pageNum], nil
 }
 
-// rowSlot вычисляет, где (в какой странице) лежит строка rowNum, и возвращает срез
-func rowSlot(t *Table, rowNum uint32) ([]byte, error) {
+// RowSlot вычисляет, где (в какой странице) лежит строка rowNum, и возвращает срез
+func RowSlot(t *Table, rowNum uint32) ([]byte, error) {
 	if rowNum >= tableMaxRows {
 		return nil, errors.New("rowNum out of table max size")
 	}
@@ -188,70 +196,72 @@ func rowSlot(t *Table, rowNum uint32) ([]byte, error) {
 	return page[byteOffset : byteOffset+rowSize], nil
 }
 
-// InsertRow добавляет новую строку в таблицу (аналог execute_insert)
-func (t *Table) InsertRow(id uint32, username, email string) error {
-	if t.numRows >= tableMaxRows {
-		return errors.New("table is full")
-	}
-
-	// Готовим Row
-	var r Row
-	r.ID = id
-	copy(r.Username[:], []byte(username))
-	copy(r.Email[:], []byte(email))
-
-	// Находим ячейку
-	slot, err := rowSlot(t, t.numRows)
-	if err != nil {
-		return err
-	}
-	// Сериализуем
-	serializeRow(&r, slot)
-
-	// Увеличиваем счётчик
-	t.numRows++
-	return nil
+// TableStart возвращает курсор на начало таблицы
+func TableStart(tbl *Table) *Cursor {
+    c := &Cursor{
+        Table:      tbl,
+        RowNum:     0,
+        EndOfTable: (tbl.NumRows == 0),
+    }
+    return c
 }
 
-// SelectAll — читает все строки по порядку, печатает их
-func (t *Table) SelectAll() {
-	var r Row
-	for i := uint32(0); i < t.numRows; i++ {
-		slot, err := rowSlot(t, i)
-		if err != nil {
-			fmt.Printf("Error reading row %d: %v\n", i, err)
-			return
-		}
-		deserializeRow(slot, &r)
-		printRow(&r)
-	}
+// TableEnd возвращает курсор на позицию "за последней строкой"
+func TableEnd(tbl *Table) *Cursor {
+    c := &Cursor{
+        Table:      tbl,
+        RowNum:     tbl.NumRows,
+        EndOfTable: true, // "за концом"
+    }
+    return c
 }
 
-// printRow выводит строку в формате "(id, username, email)"
-func printRow(r *Row) {
-	uname := trimNull(r.Username[:])
-	email := trimNull(r.Email[:])
+// CursorValue даёт указатель (срез) на текущий row в памяти
+func CursorValue(c *Cursor) ([]byte, error) {
+    rowNum := c.RowNum
+    pageNum := rowNum / rowsPerPage
+    slotOffset := (rowNum % rowsPerPage) * rowSize
+
+    page, err := getPage(c.Table.pager, pageNum)
+    if err != nil {
+        return nil, err
+    }
+    return page[slotOffset : slotOffset+rowSize], nil
+}
+
+// CursorAdvance двигает курсор вперёд
+func CursorAdvance(c *Cursor) {
+    c.RowNum++
+    if c.RowNum >= c.Table.NumRows {
+        c.EndOfTable = true
+    }
+}
+
+// PrintRow выводит строку в формате "(id, username, email)"
+func PrintRow(r *Row) {
+	uname := TrimNull(r.Username[:])
+	email := TrimNull(r.Email[:])
 	fmt.Printf("(%d, %s, %s)\n", r.ID, uname, email)
 }
 
-// serializeRow / deserializeRow: копируют поля Row в байтовый срез и обратно
-func serializeRow(source *Row, dest []byte) {
+// SerializeRow / DeserializeRow: копируют поля Row в байтовый срез и обратно
+func SerializeRow(source *Row, dest []byte) {
 	// ID (4 байта, little-endian)
-	putUint32(dest[0:4], source.ID)
+	PutUint32(dest[0:4], source.ID)
 	// username (32 байт)
 	copy(dest[4:4+32], source.Username[:])
 	// email (255 байт)
 	copy(dest[4+32:4+32+255], source.Email[:])
 }
 
-func deserializeRow(src []byte, dest *Row) {
-	dest.ID = getUint32(src[0:4])
+func DeserializeRow(src []byte, dest *Row) {
+	dest.ID = GetUint32(src[0:4])
 	copy(dest.Username[:], src[4:4+32])
 	copy(dest.Email[:], src[4+32:4+32+255])
 }
 
-// trimNull убирает нулевые байты (\0) в конце
-func trimNull(b []byte) string {
+// TrimNull убирает нулевые байты (\0) в конце
+func TrimNull(b []byte) string {
 	n := 0
 	for n < len(b) && b[n] != 0 {
 		n++
@@ -259,15 +269,15 @@ func trimNull(b []byte) string {
 	return string(b[:n])
 }
 
-// putUint32 / getUint32 — для чтения/записи ID в little-endian
-func putUint32(buf []byte, x uint32) {
+// PutUint32 / GetUint32 — для чтения/записи ID в little-endian
+func PutUint32(buf []byte, x uint32) {
 	buf[0] = byte(x)
 	buf[1] = byte(x >> 8)
 	buf[2] = byte(x >> 16)
 	buf[3] = byte(x >> 24)
 }
 
-func getUint32(buf []byte) uint32 {
+func GetUint32(buf []byte) uint32 {
 	return uint32(buf[0]) |
 		uint32(buf[1])<<8 |
 		uint32(buf[2])<<16 |

@@ -59,21 +59,68 @@ func PrepareStatement(b *buffer.Buffer, statement *types.Statement) types.Prepar
     }
 }
 
-// ExecuteStatement обрабатывает INSERT и SELECT
+// ExecuteStatement — теперь используем Cursor
 func ExecuteStatement(stmt *types.Statement, t *table.Table) {
     switch stmt.Type {
     case types.StatementInsert:
-        // Вставляем новую строку
-        err := t.InsertRow(stmt.ID, stmt.Username, stmt.Email)
-        if err != nil {
-            fmt.Println("Error: Table full.")
-        } else {
-            fmt.Println("Executed.")
-        }
+        executeInsert(stmt, t)
 
     case types.StatementSelect:
-        // Выводим все строки
-        t.SelectAll()
-        fmt.Println("Executed.")
+        executeSelect(t)
     }
+}
+
+// executeInsert: ставит курсор в конец, пишет новую строку, увеличивает numRows
+func executeInsert(stmt *types.Statement, t *table.Table) {
+    // Проверка переполнения
+    if t.NumRows >= t.MaxRows() {
+        fmt.Println("Error: Table full.")
+        return
+    }
+
+	// Создаём курсор на конец
+	c := table.TableEnd(t)
+	// Получаем "срез" байт, куда будем сериализовать
+	slot, err := table.CursorValue(c)
+    if err != nil {
+        fmt.Printf("Error obtaining slot: %v\n", err)
+        return
+    }
+
+    // Формируем новую Row
+    var r table.Row
+    r.ID = stmt.ID
+    // Копируем username/email в фиксированную длину массива
+    copy(r.Username[:], stmt.Username)
+    copy(r.Email[:], stmt.Email)
+
+	// Сериализуем в slot
+	table.SerializeRow(&r, slot)
+
+    // Увеличиваем счётчик строк
+    t.NumRows++
+
+    fmt.Println("Executed.")
+}
+
+// executeSelect: ставит курсор в начало, идём по строкам, печатаем
+func executeSelect(t *table.Table) {
+    c := table.TableStart(t)
+    var r table.Row
+
+    for !c.EndOfTable {
+        slot, err := table.CursorValue(c)
+        if err != nil {
+            fmt.Printf("Error reading row: %v\n", err)
+            return
+        }
+        // Десериализуем
+        table.DeserializeRow(slot, &r)
+        table.PrintRow(&r)
+
+        // Двигаем курсор
+        table.CursorAdvance(c)
+    }
+
+    fmt.Println("Executed.")
 }
