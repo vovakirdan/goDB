@@ -12,19 +12,7 @@ import (
 )
 
 func main() {
-    // Пример: go run ./cmd/main.go mydb.db
-    if len(os.Args) < 2 {  // todo implement .open command
-        fmt.Println("Must supply a database filename. E.g.: go run ./cmd/main.go mydb.db")
-        os.Exit(1)
-    }
-    filename := os.Args[1]
-
-    // Вместо NewTable — открываем (создаём) "persisted" таблицу
-    t, err := db.DbOpen(filename)
-    if err != nil {
-        fmt.Printf("Error opening table from file %s: %v\n", filename, err)
-        os.Exit(1)
-    }
+    var t *db.Table
 
     // Создаём буфер ввода
     b := buffer.NewBuffer()
@@ -44,7 +32,12 @@ func main() {
 
         // Мета-команды (нач. с '.')
         if b.IsSysCommand() {
-            switch db.DoMetaCommand(b, t) {
+            result, newTable := db.DoMetaCommand(b, t)
+            if newTable != nil {
+                t = newTable // Assign the newly opened table
+            }
+
+            switch result {
             case types.MetaCommandEmpty:
                 utils.PrintEmptyCommand()
                 continue
@@ -54,6 +47,11 @@ func main() {
             case types.MetaCommandSuccess:
                 continue
             }
+        }
+
+        if t == nil {
+            fmt.Println("No database is open. Use '.open <filename>' to open or create a database file.")
+            continue
         }
 
         // Подготавливаем Statement
@@ -72,5 +70,7 @@ func main() {
         // Выполняем Statement
         db.ExecuteStatement(&stmt, t)
     }
-	_ = db.DbClose(t)
+	if t != nil {
+        _ = db.DbClose(t)
+    }
 }

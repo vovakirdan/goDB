@@ -10,25 +10,55 @@ import (
 )
 
 // DoMetaCommand проверяет мета-команды
-func DoMetaCommand(b *buffer.Buffer, t *Table) types.MetaCommandResult {
+func DoMetaCommand(b *buffer.Buffer, t *Table) (types.MetaCommandResult, *Table) {
 	if len(b.Keywords()) == 0 {
-		return types.MetaCommandEmpty
+		return types.MetaCommandEmpty, t
 	}
 	cmd := b.Keywords()[0]
 
-	if cmd == "exit" {
-		// Закрываем и выходим
-		_ = DbClose(t)
-		os.Exit(int(types.MetaCommandSuccess))
-	} else if cmd == "btree" {
-		fmt.Println("Tree:")
-		printLeafNode(t)
-		return types.MetaCommandSuccess
-	} else if cmd == "constants" {
-		printConstants()
-		return types.MetaCommandSuccess
-	}
-	return types.MetaCommandUnrecognized
+	switch cmd {
+    case "exit":
+        // Close if open
+        if t != nil {
+            _ = DbClose(t)
+        }
+        os.Exit(int(types.MetaCommandSuccess))
+
+    case "open":
+        // Usage: ".open mydb.db"
+        if len(b.Keywords()) < 2 {
+            fmt.Println("Usage: .open <filename>")
+            return types.MetaCommandSuccess, t
+        }
+        filename := b.Keywords()[1]
+        newTable, err := DbOpen(filename)
+        if err != nil {
+            fmt.Printf("Error opening database file: %v\n", err)
+            return types.MetaCommandSuccess, t
+        }
+        fmt.Println("Database opened successfully!")
+        return types.MetaCommandSuccess, newTable
+
+    case "btree":
+        // Print B-Tree of current DB (if open)
+        if t == nil {
+            fmt.Println("No database is open.")
+            return types.MetaCommandSuccess, t
+        }
+        fmt.Println("Tree:")
+        printLeafNode(t)
+        return types.MetaCommandSuccess, t
+
+    case "constants":
+        printConstants()
+        return types.MetaCommandSuccess, t
+
+    default:
+        // Unrecognized meta command
+        return types.MetaCommandUnrecognized, t
+    }
+
+	return types.MetaCommandUnrecognized, t
 }
 
 // PrepareStatement разбирает INSERT/SELECT
